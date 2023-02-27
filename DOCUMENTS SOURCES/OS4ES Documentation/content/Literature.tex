@@ -1,0 +1,84 @@
+\chapter{Documents from literature} \label{CH_lit}
+We used the following papers understand better the way DMA attacks are performed. 
+
+\section{Paper 1}
+The title of the paper is \textit{Characterizing, exploiting, and detecting DMA code injection vulnerabilities in the presence of an IOMMU} \cite{10.1145/3447786.3456249}.
+
+This paper primarily focuses on the challenges of conducting a DMA attack when an Input/Output (IO) Memory Management Unit (MMU) is present (an IO MMU is similar to a regular MMU but only deals with IO accesses). If you are not familiar with virtual memory on x86 systems, this paper may be a bit difficult to understand. Since our system does not have virtual memory or protection, our goal is to summarize some of the key ideas from the paper using only physical address space. 
+
+The first half of the paper is the most important, as it provides an overview of DMA attacks and the necessary conditions to perform a code injection. In the second half, the authors present a tool they developed to perform static analysis of the Linux kernel and identify vulnerabilities of a particular type.
+
+A system with a DMA controller is always vulnerable to DMA attacks. These attacks can occur concurrently with normal CPU execution, making it difficult for the system to detect them. DMA attacks can often be executed by exploiting firmware bugs. There are various types of attacks that can be carried out using DMA, including injecting and executing code on the target system, stealing sensitive information such as secret cipher keys, and dumping the entire memory.
+
+As previously mentioned, the paper discusses some characteristics of modern operating systems that can be helpful in defending against DMA attacks. We will briefly summarize them here to explain why they are not relevant in our context. 
+\begin{itemize}
+\item IOMMU: an Input/Output Memory Management Unit (IOMMU) allows peripherals to access only certain virtual addresses (IOVAs) and prevents them from accessing physical addresses directly. A single physical address can be mapped to multiple IOVAs, just as in the CPU's virtual memory. In our system, we don't use virtual addresses, as we do not have a MMU: both the CPU and the peripherals always use physical addresses without any form of protection.
+\item NX-BIT: in a system with virtual memory, pages have certain bits that describe the operations that can be performed on them. For example, if the W bit is 1, you can write to that page using a certain virtual address (VA). If you try to perform this operation on a page with the W bit set to 0, you will receive an exception (likely a segmentation fault). One bit that is present is the NX bit, which determines whether the content of that page can be used as executable code or not. If a peripheral is able to inject malicious code into memory and that area of memory has NX=0, the code cannot be executed. If you try to execute it, you will receive an exception. This is not an issue in our system, since we do not have any protection. If we can write to the Program Counter register, we can execute malicious code from any location in memory as long as we have write access. 
+\item (K)ASLR: in many DMA attacks, we need to know a specific memory address in order to steal data or inject malicious code. This is easy if we already know the memory layout. Some systems randomize the memory layout and the location of important data structures at each boot to prevent attackers from guessing the locations based on previous execution. Since our system does not have this feature, we can assume that it may be easy to locate addresses by using the .mem file after compiling/flashing the board.
+\end{itemize}
+
+The authors of the paper often refer to sub-page vulnerabilities, which occur when the target buffer of a DMA transaction is smaller than a page and other data on that page may be modified or stolen. There is a classification of attacks based on this characteristic. Since we are not concerned with pages, we can think about this classification in relation to physical memory only:
+\begin{itemize}
+    \item The IO buffer (target of the DMA transaction) is part of a larger data structure that also includes function pointers. These pointers may be used as function callbacks to execute our malicious code.
+    \item There are some metadata of the operating system in addition to the IO buffer.
+    \item The IO buffer is next to some dynamically allocated data structure. This is difficult to discover since we are not responsible for managing the heap.
+\end{itemize}
+
+To perform a code injection, we need the following three attributes:
+\begin{enumerate}
+    \item A buffer filled with malicious code. If we are able to write to that buffer, we also know its physical address. 
+    \item Write access to a function callback pointer, which can alter the CPU control flow and cause it to execute the malicious code. 
+    \item A time window exists during which the device can modify the callback pointer and the CPU will subsequently jump to the pointed code.
+\end{enumerate}
+
+\section{Paper 2}
+The title of the paper is \textit{Stealthy Information Leakage Through Peripheral Exploitation in Modern Embedded Systems} \cite{9091580}. 
+
+One thing that the authors emphasize at the beginning of the work is that security is often overlooked in the embedded domain because time-to-market is considered more valuable (and engineers must focus on implementing functionalities rather than making them secure). One way to detect infiltrations in an embedded device is to profile the CPU: if its usage is higher than usual, there may be malware inside. This is why DMA attacks are powerful: DMA does not interact with the CPU, so its activity is hidden from any profiling tools within the system (the suggested solution is to detect malware by examining DMA transactions).
+
+To make the attack as general as possible, the authors use the Device Tree, a data structure provided by Embedded Linux that contains information about all connected devices. By parsing its content, they can automate the process of choosing the appropriate output analog device and initialize the DMA transactions with the correct values.
+
+To carry out the attack, the firmware of the board must be modified, which can be done physically (by changing the content of the boot memory) or remotely (by accessing the board through a network connection and gaining root access). There are various ways to verify the integrity of the original code, such as checking the hash of the entire code against a value stored in a secure memory (such as ROM, which cannot be modified). x86 systems are introducing the Secure Boot system, but it cannot be implemented in already operational embedded systems. This system is unlikely to be used in all new devices due to the area and power constraints in this domain.
+
+After introducing the new kernel with our malware (some code that is periodically executed to exfiltrate data), we are almost finished. The attacker must decide which memory addresses to leak after conducting reconnaissance and considering the attack objectives. In general, embedded systems do not implement Address Space Layout Randomization (ASLR), so it is easy to find application data addresses such as the control runtime process and leak control-related information.
+
+The remaining sections of the article discuss the actual implementation, mitigation techniques, and experimental results that demonstrate that DMA attacks do not affect CPU time.
+
+\section{Paper 3}
+The title of the paper is \emph{Attacking TrustZone on devices lacking memory protection} \cite{10.1007/s11416-021-00413-y}. 
+
+ARM Trustzone offers a Trusted Execution Environment (TEE) embedded into the processor core. It establish a new CPU operating mode called "secure mode", therefore it creates a distinction between a "secure" world and a "normal" word.  The separation is artificial: both environments use the same CPU and RAM, the distinction is given by the Non-Secure bit (NS).
+
+In this paper the authors exploit missing hardware feature on real embedded systems to execute arbitrary code in secure world: in order to work correctly TrustZone need additional dedicated hardware controller, i.e. TZASC (TrustZone Address Space Controller) and TZPC (TrustZone Protection Controller).
+
+The attack is performed on a Raspberry Pi 3 Model B. This particular board has a SoC with ARM11 core and TrustZone support, but lacks of the controller mentioned above.
+
+On this SoC the authors run OP-TEE (a Trusted Execution Environment that implements ARM TrustZone) without NS-bit support, therefore the secure memory is accessible through DMA transactions. Their goal is to change the opcodes that return error values of key functions without changing the stack, in this way they can bypass OP-TEE OS Trusted Application (TA) signature validation and gain control of every TA of the system. To reach this goal, first they read the memory pages from the RAM, then compare this memory with compiled version of the secure OS and ARM Trusted Firmware to locate similar functions. Because the OS uses Address Space Layout Randomization, they were able to use the address from the memory dump to override trusted applications signature validations through the DMA, after doing so the TEE OS succeeded to validate their malicious TA, making possible the arbitrary code execution.
+
+
+\section{Paper 4}
+The provided document is a chapter of a conference proceeding of the \emph{$9^{th}$ GI International Conference on Detection of Intrusions and Malware \& Vulnerability Assessment}, the chapter name is \emph{Understanding DMA Malware}\cite{10.1007/978-3-642-37300-8_2}.
+
+In this paper the authors explain how they implemented a malware exploiting DMA on x86 architectures, in particular executing malicious code on the processor provided by \emph{Intel's Manageability Engine}.
+
+The malware is called \textbf{DAGGER} (\textbf{D}m\textbf{A} based keystroke lo\textbf{GGER}) and in the implementations described in the paper it has been used to find and monitor the keyboard buffer.
+
+In order to perform this kind of attack, controlling the DMA engine is not enough, because the target memory address usually is not known. The attacker must overcome \emph{address randomization}, since the data structures are being saved in different location at every reboot of the system. Moreover the OS works with virtual addresses whether the DMA uses physical ones: the memory mapping is saved in so called \emph{page tables}, which physical address is saved in a register not visible to the DMA engine, therefore the attacker needs to find a way to restrict the search space, otherwise it need to scan the whole host memory. In the document the authors suggest to analyze if the OS places the desired data structures in approximately the same region or to implement OS memory management mechanisms.
+
+DAGGER performs a stealthy attack structured in three stages corresponding to three components:
+\begin{enumerate}
+    \item Search: find the address of valuable data in the host memory via DMA.
+    \item Process Data: read valuable data within the regions identified in the search process.
+    \item Exfiltration: exfiltrate information in a way that is invisible to the host (e.g. using the Network Interface Card). 
+\end{enumerate}
+
+The authors implemented two prototypes to attack two different OS target: Windows and Linux. The search phase differs according to the OS to attack:
+\begin{itemize}
+    \item Linux: the search phase is based on a signature scan which is compared with a signature derived analyzing the source code of the OS. The scan is restricted only on the kernel space, which is found in the first gigabyte of the system RAM. Exploiting GRUB, the kernel identifier is found at a constant physical memory address, using this value it is possible to derive the offset used by the OS to map the virtual addresses to the physical ones. The authors successively restrict further the search space by empirically analyzing in which memory area the kernel places the needed data structure, which in this case is \emph{USB Request Block}, in particular the field \emph{transfer\_dma}.
+    \item Windows: differently from Linux, the memory mapping does not just use an offset, but \emph{page tables} created by the kernel. The authors determined the physical address of this tables empirically and traverse them looking for a structure named \emph{DeviceExtension} containing the last-pressed key buffer. The algorithm to find a starting point for the search it is more elaborate with respect to the previous case and requires more steps. % da completare ?%
+\end{itemize}
+
+In the paper, in addition to the performance results of the malware, some possible countermeasure are discussed. It is claimed that the attack has not been detected by any anti-virus or anti-malware software present on the OS. As for the I/OMMU, the researchers enabled Intel VT-d and successfully blocked the attack on Linux, but not on Windows. They also state that to prevent the attack an I/OMMU needs an appropriate configuration and additional hardware that prevents the same malware from changing its configuration.
+
+
+

@@ -1,0 +1,68 @@
+\documentclass[a4paper]{report}
+
+% -------- Required packages -------
+
+\usepackage[a4paper,top=3cm,bottom=3cm,left=4cm,right=4cm]{geometry} 
+\usepackage[fontsize=13pt]{scrextend}
+\usepackage[fixlanguage]{babelbib}
+\usepackage[dvipsnames]{xcolor}
+\usepackage[utf8]{inputenc} 
+\usepackage[english]{babel}
+\usepackage[normalem]{ulem}
+\usepackage{algpseudocode}
+\usepackage[T1]{fontenc}
+\usepackage{kantlipsum}
+\usepackage{algorithm}
+\usepackage{rotating}
+\usepackage{fancyhdr}
+\usepackage{listings}
+\usepackage{hyperref}
+\usepackage{graphicx}
+\usepackage{csquotes}
+\usepackage{hyperref}
+\usepackage{amssymb}
+\usepackage{amsmath}
+\usepackage{amsthm}         
+\usepackage{float}
+\usepackage{array}
+
+\usepackage[
+    type={CC},
+    modifier={by-nc-sa},
+    version={4.0},
+]{doclicense}
+
+%------------- Other commands ----------------
+\renewcommand{\chapterautorefname}{Chapter}
+
+%--------code listing---------
+ 
+\definecolor{codegreen}{rgb}{0,0.6,0}
+\definecolor{codegray}{rgb}{0.5,0.5,0.5}
+\definecolor{codepurple}{rgb}{0.58,0,0.82}
+\definecolor{backcolour}{rgb}{0.95,0.95,0.92}
+
+\lstdefinestyle{mystyle}{
+    backgroundcolor=\color{backcolour},   
+    commentstyle=\color{codegreen},
+    keywordstyle=\color{blue},
+    numberstyle=\tiny\color{codegray},
+    stringstyle=\color{codepurple},
+    basicstyle=\tiny,
+    breakatwhitespace=false,         
+    breaklines=true,                 
+    captionpos=b,                    
+    keepspaces=true,                 
+    numbers=left,                    
+    numbersep=5pt,                  
+    showspaces=false,                
+    showstringspaces=false,
+    showtabs=false,                  
+    tabsize=2
+}
+ 
+\lstset{style=mystyle}
+
+
+
+%------end listing------
